@@ -1,0 +1,6 @@
+name: disco-engine
+version: '1.0'
+main: discoteka.DiscoEngine
+api-version: '1.21'
+authors: [publicstaticyan]
+description: Discoteka Spigot plugin
