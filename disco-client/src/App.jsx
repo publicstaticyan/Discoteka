@@ -1,44 +1,71 @@
 import './App.css'
-import {useRef, useState} from "react";
+import {useState} from "react";
+import ReactPlayer from "react-player";
+import useWebSocket from "react-use-websocket";
+
+const socketUrl = "ws://localhost:8082/ws"
+
+function mountMessage(type, payload) {
+    return JSON.stringify({
+        type,
+        payload
+    })
+}
 
 function App() {
 
-    const [message, setMessage] = useState("")
+    const [connectionStatus, setConnectionStatus] = useState(false)
+
+    const [playerName, setPlayerName] = useState("")
+    const [invalidPlayer, setInvalidPlayer] = useState(false)
     const [connected, setConnected] = useState(false)
-    const [receivedMessages, setReceivedMessages] = useState([])
-    const pingInterval = useRef(null)
-    const socket = useRef(null)
 
-    function createConnection() {
-        if (socket.current === undefined || socket.current === null) {
-            socket.current = new WebSocket("ws://localhost:8080/ws")
+    const { sendMessage } = useWebSocket(
+        socketUrl,
+        {
+            heartbeat: {
+                message: mountMessage("PING", {}),
+                returnMessage: mountMessage("PING", {reply: "pong"}),
+                timeout: '60000',
+                interval: '10000'
+            },
+            shouldReconnect: () => false,
+            onOpen: () => validatePlayer(playerName),
+            onClose: () => setConnected(false),
+            onMessage: (message) => handleMessage(message)
+        },
+        connectionStatus
+    )
 
-            socket.current.onopen = () => {
-                setConnected(true)
-                startPinging()
-            }
+    function handleMessage(message) {
+        const messageData = JSON.parse(message.data)
 
-            socket.current.onclose = () => {
-                setConnected(false)
-                clearInterval(pingInterval.current)
-            }
-
-            socket.current.onmessage = (message) => {
-                setReceivedMessages((prevMessages) => [...prevMessages, message.data])
-            }
+        switch (messageData.type) {
+            case "PLAYER_VALIDATION":
+                handlePlayerValidation(messageData.payload.reply)
+                break
+            case "COMMAND":
+                break
         }
     }
 
-    function startPinging() {
-        pingInterval.current = setInterval(() => {
-            if (socket.current.readyState === WebSocket.OPEN) {
-                socket.current.send("ping")
-            }
-        }, 5000)
+    function handleConnection() {
+        setConnectionStatus(!connectionStatus)
     }
 
-    function sendMessage() {
-        socket.current.send(message)
+    function validatePlayer(playerName) {
+        sendMessage(mountMessage("PLAYER_VALIDATION", { playerName }))
+    }
+
+    function handlePlayerValidation(reply) {
+        if (reply === false) {
+            setInvalidPlayer(true)
+            handleConnection()
+            return
+        }
+
+        setConnected(true)
+        setInvalidPlayer(false)
     }
 
     return (
@@ -46,44 +73,41 @@ function App() {
             <h1>Discoteka</h1>
 
             <input
-                disabled={!connected}
-                onChange={(event) => setMessage(event.target.value)}
-                value={message}/>
-
-            <button
-                disabled={!connected}
-                onClick={sendMessage}
-                type="submit"
-            >
-                Send Message
-            </button>
-
-            <br/>
-            <br/>
-
-            <button
                 disabled={connected}
-                onClick={createConnection}
+                onChange={(event) => setPlayerName(event.target.value)}
+                placeholder="Player name"
+                value={playerName}/>
+
+            <button
+                onClick={handleConnection}
                 type="submit"
             >
-                Connect Socket
+                {connected ? "Disconnect" : "Connect"}
             </button>
 
+            <br/>
             <br/>
 
             <p>Connection status:
                 <span style={{ color: connected ? 'green' : 'red'}}> {connected ? "CONNECTED" : "DISCONNECTED"}</span>
             </p>
 
-            <br/>
-            <br/>
+            {connected ?
+                <div>
+                    <img src={"https://mc-heads.net/avatar/" + playerName + ".png"} alt=""/>
+                </div> : <></>}
 
-            <p>Messages:</p>
-            <ul>
-                {receivedMessages.map((message, index) => (
-                    <li key={index}>{message}</li>
-                ))}
-            </ul>
+            {invalidPlayer ?
+                <p style={{ color: 'red' }}>PLAYER NOT FOUND</p>
+                :
+                <></>
+            }
+
+            <ReactPlayer
+                // playing={true}
+                // controls={false}
+                url={"https://www.youtube.com/watch?v=_Ca12JSMN9E"}
+            />
         </div>
     )
 }

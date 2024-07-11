@@ -12,20 +12,22 @@ object WebSocketServer {
 
     private lateinit var server: Server
 
-    private var port = 8080
-
     fun start() {
-        try {
-            createServer()
-        } catch (ex: Exception) {
-            // TODO increase ports until connection is established
-            port++
-            Bukkit.getConsoleSender().sendMessage("§c[SOCKET] Failed! Retrying on port $port")
-            createServer()
+        var port = 8080
+
+        // TODO remove this
+        while (port < 8100) {
+            try {
+                createServer(port)
+                break
+            } catch (ex: Exception) {
+                Bukkit.getConsoleSender().sendMessage("§c[SOCKET] Failed! Retrying on port $port")
+                port++
+            }
         }
     }
 
-    private fun createServer() {
+    private fun createServer(port: Int) {
         server = Server(port)
 
         Bukkit.getConsoleSender().sendMessage("§6[SOCKET] Creating WebSocket server on port $port")
