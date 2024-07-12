@@ -8,13 +8,7 @@ import org.bukkit.block.Block
 import org.bukkit.scheduler.BukkitRunnable
 import java.util.*
 
-
 object Arena {
-    private const val CELL_SIZE = 3;
-    private const val GRID_SIZE = 15;
-    private val usedColors: MutableList<Material> = ArrayList()
-    private val startLocation = Location(Bukkit.getWorld("world"), 0.0, 60.0, 0.0)
-    private var step: Double = 0.2
     private val COLORS = arrayOf(
         Material.ORANGE_CONCRETE,
         Material.MAGENTA_CONCRETE,
@@ -29,22 +23,30 @@ object Arena {
         Material.GREEN_CONCRETE,
         Material.RED_CONCRETE,
     )
-    
+
+    private const val CELL_SIZE = 5;
+    private const val GRID_SIZE = 30;
+    private var step: Double = 0.2
+    private val usedColors: MutableList<Material> = ArrayList()
+    private val startLocation = Location(Bukkit.getWorld("world"), 0.0, 60.0, 0.0)
+
+
     fun spawn() {
         buildGrid { block, material ->
             block.type = material
         }
+//        buildPath { block, material ->
+//            block.type = material
+//        }
     }
 
     fun destroy() {
         buildGrid { block, _ ->
             block.type = Material.AIR
         }
-    }
-
-    fun getCenter(): Location {
-        val centerOffset = ((GRID_SIZE * CELL_SIZE) / 2).toDouble()
-        return startLocation.clone().add(centerOffset, 2.0, centerOffset)
+//        buildPath { block, _ ->
+//            block.type = Material.AIR
+//        }
     }
 
     private fun buildGrid(action: (Block, Material) -> Unit) {
@@ -54,10 +56,12 @@ object Arena {
         buildArena(action)
     }
 
+
     private fun buildArena(action: (Block, Material) -> Unit) {
-        for (row in 0 until GRID_SIZE) {
-            for (col in 0 until GRID_SIZE) {
-                // col 1 * cell_size 5 = 5 || col 2 * cell_size 5 = 10 ... ||
+        val numCells = GRID_SIZE / CELL_SIZE
+
+        for (row in 0 until numCells) {
+            for (col in 0 until numCells) {
                 val cellStart: Location = startLocation.clone().add(
                     (col * CELL_SIZE).toDouble(), 0.0,
                     (row * CELL_SIZE).toDouble()
@@ -84,7 +88,7 @@ object Arena {
                         action(block, material)
                     }
                 }.runTaskLater(getInstance(), step.toLong())
-                step+=0.2
+                step += 0.2
             }
         }
     }
@@ -100,5 +104,44 @@ object Arena {
         usedColors.add(color)
 
         return color;
+    }
+
+    val center: Location
+        get() {
+            val centerOffset = (GRID_SIZE / 2).toDouble()
+            return startLocation.clone().add(centerOffset, 2.0, centerOffset)
+        }
+
+    private fun buildPath(action: (Block, Material) -> Unit) {
+        val pathMaterial = Material.SMOOTH_STONE
+        val pathWidth = 3
+        val gap = 3
+        val arenaSize = GRID_SIZE
+        val elevation = 3
+
+        val innerEdgeStart = startLocation.clone().add(-gap.toDouble(), 0.0, -gap.toDouble())
+        val innerEdgeEnd = startLocation.clone().add((arenaSize + gap).toDouble(), 0.0, (arenaSize + gap).toDouble())
+
+        val outerEdgeStart = innerEdgeStart.clone().add(-pathWidth.toDouble(), 0.0, -pathWidth.toDouble())
+        val outerEdgeEnd = innerEdgeEnd.clone().add(pathWidth.toDouble(), 0.0, pathWidth.toDouble())
+
+        // Build the path around the arena with a gap
+        for (x in outerEdgeStart.blockX until outerEdgeEnd.blockX) {
+            for (z in outerEdgeStart.blockZ until outerEdgeEnd.blockZ) {
+
+                if ((x in (outerEdgeStart.blockX until innerEdgeStart.blockX) ||
+                            x in (innerEdgeEnd.blockX until outerEdgeEnd.blockX)) ||
+                    (z in (outerEdgeStart.blockZ until innerEdgeStart.blockZ) ||
+                            z in (innerEdgeEnd.blockZ until outerEdgeEnd.blockZ))) {
+                    val blockLocation = startLocation.world?.getBlockAt(x, startLocation.blockY + elevation, z)?.location
+                    blockLocation?.block?.type = pathMaterial
+                }
+            }
+        }
+
+        innerEdgeEnd.block.type = Material.PURPLE_CONCRETE
+        innerEdgeStart.block.type = Material.MAGENTA_CONCRETE
+        outerEdgeEnd.block.type = Material.GREEN_CONCRETE
+        outerEdgeStart.block.type = Material.LIME_CONCRETE
     }
 }
