@@ -23,6 +23,10 @@ class DiscoEngine : JavaPlugin() {
         WebSocketServer.start()
     }
 
+    override fun onDisable() {
+        WebSocketServer.stop()
+    }
+
     companion object {
         fun getInstance(): DiscoEngine {
             return getPlugin(DiscoEngine::class.java)
