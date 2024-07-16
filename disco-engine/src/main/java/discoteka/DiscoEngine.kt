@@ -1,6 +1,5 @@
 package discoteka
 
-import discoteka.managers.GameManager
 import discoteka.utils.registration.command.CommandLoader
 import discoteka.utils.registration.listener.ListenerLoader
 import discoteka.websocket.WebSocketServer
@@ -19,7 +18,6 @@ class DiscoEngine : JavaPlugin() {
         CommandLoader.registerCommands()
         ListenerLoader.registerListeners()
 
-        GameManager.start()
         WebSocketServer.start()
     }
 

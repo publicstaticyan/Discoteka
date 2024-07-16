@@ -1,115 +1,110 @@
 package discoteka.game
 
 import discoteka.DiscoEngine.Companion.getInstance
+import discoteka.constants.Constants
+import discoteka.utils.DiscoUtils
 import org.bukkit.Bukkit
 import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.block.Block
+import org.bukkit.inventory.ItemStack
 import org.bukkit.scheduler.BukkitRunnable
 import java.util.*
 
 object Arena {
-    private val COLORS = arrayOf(
-        Material.ORANGE_CONCRETE,
-        Material.MAGENTA_CONCRETE,
-        Material.LIGHT_BLUE_CONCRETE,
-        Material.YELLOW_CONCRETE,
-        Material.LIME_CONCRETE,
-        Material.PINK_CONCRETE,
-        Material.CYAN_CONCRETE,
-        Material.PURPLE_CONCRETE,
-        Material.BLUE_CONCRETE,
-        Material.BROWN_CONCRETE,
-        Material.GREEN_CONCRETE,
-        Material.RED_CONCRETE,
-    )
 
-    private const val CELL_SIZE = 5;
-    private const val GRID_SIZE = 30;
-    private var step: Double = 0.2
-    private val usedColors: MutableList<Material> = ArrayList()
+    private var CELL_SIZE_X = 3
+    private var CELL_SIZE_Z = 3
+    private var GRID_SIZE = 42;
+    private var DELAY = 0.0
+
+    private val usedColors = mutableListOf<Material>()
+    private val usedConcrete = mutableListOf<ItemStack>()
     private val startLocation = Location(Bukkit.getWorld("world"), 0.0, 60.0, 0.0)
+    private const val step = 0.05
 
+    fun modifyProperties(cellSizeX: Int, cellSizeZ: Int, gridSize: Int) {
+        CELL_SIZE_X = cellSizeX
+        CELL_SIZE_Z = cellSizeZ
+        GRID_SIZE = gridSize
+    }
 
-    fun spawn() {
+    fun spawn(): List<ItemStack> {
+        usedConcrete.clear()
+
         buildGrid { block, material ->
             block.type = material
         }
-//        buildPath { block, material ->
-//            block.type = material
-//        }
+
+        return usedConcrete
     }
 
     fun destroy() {
         buildGrid { block, _ ->
             block.type = Material.AIR
         }
-//        buildPath { block, _ ->
-//            block.type = Material.AIR
-//        }
     }
 
     private fun buildGrid(action: (Block, Material) -> Unit) {
         usedColors.clear()
-        step = 0.2
+        DELAY = 0.0
 
         buildArena(action)
     }
 
 
     private fun buildArena(action: (Block, Material) -> Unit) {
-        val numCells = GRID_SIZE / CELL_SIZE
+        val NUM_CELLS_X = GRID_SIZE / CELL_SIZE_X
+        val NUM_CELLS_Z = GRID_SIZE / CELL_SIZE_Z
 
-        for (row in 0 until numCells) {
-            for (col in 0 until numCells) {
+        for (row in 0 until NUM_CELLS_Z) {
+            for (col in 0 until NUM_CELLS_X) {
                 val cellStart: Location = startLocation.clone().add(
-                    (col * CELL_SIZE).toDouble(), 0.0,
-                    (row * CELL_SIZE).toDouble()
+                    (col * CELL_SIZE_X).toDouble(), 0.0,
+                    (row * CELL_SIZE_Z).toDouble()
                 )
 
-                val material = getUniqueConcrete()
+                val concrete = DiscoUtils.getRandomConcreteColor(usedColors)
 
-                buildCell(cellStart, material, action)
+                usedConcrete.add(concrete)
 
-                if (usedColors.size >= COLORS.size - 1) {
-                    usedColors.clear()
-                }
+                buildCell(cellStart, concrete.type, action)
             }
         }
     }
 
     private fun buildCell(cellStart: Location, material: Material, action: (Block, Material) -> Unit) {
-        for (x in 0 until CELL_SIZE) {
-            for (z in 0 until CELL_SIZE) {
+        for (x in 0 until CELL_SIZE_X) {
+            for (z in 0 until CELL_SIZE_Z) {
                 val block = Bukkit.getWorld("world")!!.getBlockAt(cellStart.clone().add(x.toDouble(), 0.0, z.toDouble()))
 
-                object : BukkitRunnable() {
-                    override fun run() {
+//                object : BukkitRunnable() {
+//                    override fun run() {
                         action(block, material)
-                    }
-                }.runTaskLater(getInstance(), step.toLong())
-                step += 0.2
+//                    }
+//                }.runTaskLater(getInstance(), DELAY.toLong())
+//                DELAY += step
             }
         }
     }
 
-    private fun getUniqueConcrete(): Material {
-        val random = Random()
-        var color: Material
+    fun purgeBlocks(chosenMaterial: Material) {
+        for (x in startLocation.blockX until startLocation.blockX + GRID_SIZE) {
+            for (z in startLocation.blockZ until startLocation.blockZ + GRID_SIZE) {
+                val block = Bukkit.getWorld("world")!!.getBlockAt(x, startLocation.blockY, z)
 
-        do {
-            color = COLORS[random.nextInt(COLORS.size)]
-        } while (usedColors.contains(color))
-
-        usedColors.add(color)
-
-        return color;
+                if (block.type != chosenMaterial) {
+                    block.type = Material.AIR
+                }
+            }
+        }
     }
 
     val center: Location
         get() {
-            val centerOffset = (GRID_SIZE / 2).toDouble()
-            return startLocation.clone().add(centerOffset, 2.0, centerOffset)
+            val centerOffsetX = (GRID_SIZE / 2).toDouble()
+            val centerOffsetZ = (GRID_SIZE / 2).toDouble()
+            return startLocation.clone().add(centerOffsetX, 2.0, centerOffsetZ)
         }
 
     private fun buildPath(action: (Block, Material) -> Unit) {

@@ -4,4 +4,5 @@ enum class MessageType {
     PING,
     PLAYER_VALIDATION,
     COMMAND,
+    LINK,
 }

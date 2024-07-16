@@ -3,7 +3,7 @@ import {useState} from "react";
 import ReactPlayer from "react-player";
 import useWebSocket from "react-use-websocket";
 
-const socketUrl = "ws://localhost:8082/ws"
+const socketUrl = "ws://localhost:8080/ws"
 
 function mountMessage(type, payload) {
     return JSON.stringify({
@@ -15,10 +15,13 @@ function mountMessage(type, payload) {
 function App() {
 
     const [connectionStatus, setConnectionStatus] = useState(false)
-
     const [playerName, setPlayerName] = useState("")
     const [invalidPlayer, setInvalidPlayer] = useState(false)
     const [connected, setConnected] = useState(false)
+
+    const [videoUrl, setVideoUrl] = useState("")
+    const [audioPath, setAudioPath] = useState("")
+    const [playing, setPlaying] = useState(false)
 
     const { sendMessage } = useWebSocket(
         socketUrl,
@@ -31,7 +34,10 @@ function App() {
             },
             shouldReconnect: () => false,
             onOpen: () => validatePlayer(playerName),
-            onClose: () => setConnected(false),
+            onClose: () => {
+                setConnected(false)
+                setVideoUrl("")
+            },
             onMessage: (message) => handleMessage(message)
         },
         connectionStatus
@@ -42,9 +48,38 @@ function App() {
 
         switch (messageData.type) {
             case "PLAYER_VALIDATION":
-                handlePlayerValidation(messageData.payload.reply)
+                handlePlayerValidation(messageData.payload)
                 break
             case "COMMAND":
+                handleVideoCommand(messageData.payload)
+                break
+            case "LINK":
+                handleVideoLink(messageData.payload)
+                break
+        }
+    }
+
+    function handleVideoLink(payload) {
+        setVideoUrl(payload.url)
+    }
+
+    function handleVideoCommand(payload) {
+        switch (payload.command) {
+            case "play":
+                setPlaying(true)
+                break
+            case "pause":
+                setPlaying(false)
+                setAudioPath("/backspin.mp3")
+                break
+            case "loose":
+                setAudioPath("/aww.mp3")
+                break
+            case "winner":
+                setAudioPath("/yippee.mp3")
+                break
+            case "alive":
+                setAudioPath("/yaay.mp3")
                 break
         }
     }
@@ -57,8 +92,8 @@ function App() {
         sendMessage(mountMessage("PLAYER_VALIDATION", { playerName }))
     }
 
-    function handlePlayerValidation(reply) {
-        if (reply === false) {
+    function handlePlayerValidation(payload) {
+        if (payload.reply === false) {
             setInvalidPlayer(true)
             handleConnection()
             return
@@ -70,7 +105,7 @@ function App() {
 
     return (
         <div>
-            <h1>Discoteka</h1>
+            <h1>DOKUSHAISHANG PROJECT</h1>
 
             <input
                 disabled={connected}
@@ -92,21 +127,20 @@ function App() {
                 <span style={{ color: connected ? 'green' : 'red'}}> {connected ? "CONNECTED" : "DISCONNECTED"}</span>
             </p>
 
-            {connected ?
-                <div>
-                    <img src={"https://mc-heads.net/avatar/" + playerName + ".png"} alt=""/>
-                </div> : <></>}
+            {connected && <img src={"https://mc-heads.net/avatar/" + playerName + ".png"} alt=""/> }
 
-            {invalidPlayer ?
-                <p style={{ color: 'red' }}>PLAYER NOT FOUND</p>
-                :
-                <></>
-            }
+            {invalidPlayer && <p style={{ color: 'red' }}>PLAYER NOT FOUND</p> }
 
             <ReactPlayer
-                // playing={true}
-                // controls={false}
-                url={"https://www.youtube.com/watch?v=_Ca12JSMN9E"}
+                playing={playing}
+                controls={false}
+                url={videoUrl}
+                loop={true}
+            />
+
+            <ReactPlayer
+                playing={true}
+                url={audioPath}
             />
         </div>
     )

@@ -1,6 +1,9 @@
 package discoteka.commands
 
 import discoteka.enums.MessageType
+import discoteka.enums.Music
+import discoteka.enums.Playback
+import discoteka.handlers.WebPlayerHandler
 import discoteka.utils.registration.command.DiscoCommand
 import discoteka.vo.MessageVO
 import discoteka.websocket.WebSocketServer
@@ -12,9 +15,14 @@ class PlayCmd : DiscoCommand(
     permission = false
 ) {
     override fun onCommand(sender: CommandSender?, args: Array<String>?) {
-        val link = args?.get(0)
+        val idx = args?.get(0)?.toInt()
         val player = sender as Player
-        WebSocketServer.notifySessions(player.name, MessageVO(MessageType.COMMAND, mapOf("play" to link!!)))
-        player.sendMessage("§aPlaying the youtube link: $link")
+
+        val music = Music.values()[idx!!]
+
+        WebPlayerHandler.link(player, music.url)
+        WebPlayerHandler.command(player, Playback.PLAY)
+
+        player.sendMessage("§aPlaying the youtube link: ${music.title}")
     }
 }

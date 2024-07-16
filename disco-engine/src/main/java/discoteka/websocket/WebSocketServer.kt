@@ -69,6 +69,16 @@ object WebSocketServer {
         sessions.remove(session)
     }
 
+    fun isSessionRegistered(playerName: String): Boolean {
+        return sessions.containsValue(playerName)
+    }
+
+    fun notifyAllSessions(message: MessageVO) {
+        val json = Mapper.objectMapper.writeValueAsString(message)
+        sessions.entries
+            .forEach { it.key.basicRemote.sendText(json) }
+    }
+
     fun notifySessions(playerName: String, message: MessageVO) {
         val json = Mapper.objectMapper.writeValueAsString(message)
         sessions.entries
