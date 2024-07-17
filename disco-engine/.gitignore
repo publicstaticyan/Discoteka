@@ -1,4 +1,6 @@
 HELP.md
+dependency-reduced-pom.xml
+test.iml
 target/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/

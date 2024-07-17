@@ -1,5 +1,9 @@
 package discoteka.websocket
 
+import discoteka.enums.MessageType
+import discoteka.enums.Playback
+import discoteka.game.Game
+import discoteka.handlers.WebPlayerHandler
 import discoteka.utils.Mapper
 import discoteka.vo.MessageVO
 import jakarta.servlet.ServletContext
@@ -63,6 +67,23 @@ object WebSocketServer {
 
     fun registerSession(playerName: String, session: Session) {
         sessions[session] = playerName
+
+        if (Game.hasStarted()) {
+            // TODO refactor this, duplicate code on other class
+            val link = MessageVO(
+                MessageType.LINK,
+                mapOf("url" to (Game.chosenMusic?.url ?: ""))
+            )
+
+            notifySessions(playerName, link)
+
+            val play = MessageVO(
+                MessageType.COMMAND,
+                mapOf("command" to Playback.PLAY)
+            )
+
+            notifySessions(playerName, play)
+        }
     }
 
     fun unregisterSession(session: Session) {

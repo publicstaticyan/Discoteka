@@ -9,7 +9,7 @@ import org.bukkit.entity.Player
 import org.bukkit.event.inventory.InventoryClickEvent
 import org.bukkit.inventory.ItemFlag
 
-class VoteMenu(holder: Player) : DiscoMenu(holder, 9, "Vote na sua musica! =D") {
+class VoteMenu(holder: Player) : DiscoMenu(holder, 54, "Vote na sua musica! =D") {
     override fun setDefaultItems() {
         for (music in Music.values()) {
             this.inventory.setItem(music.ordinal, music.item)

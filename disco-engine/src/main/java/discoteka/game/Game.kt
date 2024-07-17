@@ -8,28 +8,31 @@ import discoteka.enums.Playback
 import discoteka.handlers.WebPlayerHandler
 import discoteka.tasks.CountdownTask
 import discoteka.utils.DiscoUtils
-import org.bukkit.Bukkit
-import org.bukkit.Material
-import org.bukkit.Sound
+import discoteka.utils.FireworkBuilder
+import org.bukkit.*
 import org.bukkit.boss.BarColor
 import org.bukkit.boss.BarStyle
 import org.bukkit.boss.BossBar
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import org.bukkit.scheduler.BukkitRunnable
-import java.util.ArrayList
-import java.util.Random
+import org.bukkit.scheduler.BukkitTask
+import java.util.*
 
 object Game {
 
-    private const val INITIAL_BOSS_BAR_MESSAGE = "§b§lAGUARDANDO A ${Constants.DISCO_COLORFUL_LOGO} §b§lCOMEÇAR!"
+    private const val INITIAL_BOSS_BAR_MESSAGE = "§6§lAGUARDANDO A ${Constants.DISCO_COLORFUL_LOGO} §6§lCOMEÇAR!"
 
     private var gameStage = GameStage.WAITING
     private var playerSet = mutableSetOf<Player>()
     private var speedGap = 3.0
     private val countdownTask = CountdownTask
     private val bossBar: BossBar = Bukkit.createBossBar(INITIAL_BOSS_BAR_MESSAGE, BarColor.BLUE, BarStyle.SOLID)
+    private val aliveBossBar: BossBar = Bukkit.createBossBar("§a§lVOCÊ CONSEGUIU", BarColor.GREEN, BarStyle.SOLID)
     private val random = Random()
+    private var round = 0
+
+    var chosenMusic: Music? = null
 
     fun join(player: Player) {
         if (gameStage == GameStage.WAITING) {
@@ -57,7 +60,7 @@ object Game {
 
     fun forceStart() {
         countdownTask.stop()
-
+        beginGame()
     }
 
     fun beginGame() {
@@ -65,9 +68,10 @@ object Game {
 
         DiscoUtils.sendMessage("§aVamos dançar!")
 
-        for (player in Bukkit.getOnlinePlayers()) {
-            playerSet.add(player)
-            player.teleport(Arena.center)
+        Bukkit.getOnlinePlayers().forEach {
+            playerSet.add(it)
+            it.inventory.clear()
+            it.teleport(Arena.center)
         }
 
         startMusic()
@@ -76,34 +80,44 @@ object Game {
 
     private fun runGame() {
         // Just for record: nextRound() calls do not cause overhead, when the runnable calls the function
-        // again, the last one returns and continues the line to nextGame()
+        // again, the last one returns and continues the line to the next execution
         nextRound()
-//        resetGame()
     }
 
     private fun nextRound() {
-        if (playerSet.isEmpty()) {
+        if (gameStage != GameStage.PLAYING) {
             return
         }
 
-        bossBar.setTitle("§e§lCOMEÇANDO ROUND...")
+        round++
+
+        bossBar.color = BarColor.YELLOW
+        bossBar.setTitle("§e§lCOMEÇANDO ROUND ${round}...")
+
+        val pair = Constants.getRandomPair(round)
+        Arena.modifyProperties(pair.first, pair.second)
 
         val usedConcretes = Arena.spawn()
         val chosenConcrete = usedConcretes[random.nextInt(usedConcretes.size)]
 
-        for (player in playerSet) {
-            player.inventory.setItem(4, chosenConcrete)
+        playerSet.forEach {
+            it.inventory.setItem(4, chosenConcrete)
         }
 
         object : BukkitRunnable() {
             override fun run() {
-                bossBar.setTitle(chosenConcrete.itemMeta?.itemName)
+                if (gameStage == GameStage.PLAYING) {
+                    bossBar.setTitle(chosenConcrete.itemMeta?.displayName)
+                    bossBar.color = BarColor.BLUE
+                }
             }
         }.runTaskLater(DiscoEngine.getInstance(), 20 * 1)
 
         object : BukkitRunnable() {
             override fun run() {
-                startCountdown(chosenConcrete)
+                if (gameStage == GameStage.PLAYING) {
+                    startCountdown(chosenConcrete)
+                }
             }
         }.runTaskLater(DiscoEngine.getInstance(), 20 * 2)
     }
@@ -112,17 +126,22 @@ object Game {
         object : BukkitRunnable() {
             var count = 3
             override fun run() {
+                if (gameStage != GameStage.PLAYING) {
+                    cancel()
+                    return
+                }
+
                 if (count == 0) {
                     cancel()
                     purgeBlocks(chosenConcrete.type)
                     return
                 }
 
-                for (player in Bukkit.getOnlinePlayers()) {
-                    player.playSound(player.location, Sound.BLOCK_NOTE_BLOCK_PLING, 10.0F, (0.5 * count).toFloat())
+                Bukkit.getOnlinePlayers().forEach {
+                    it.playSound(it.location, Sound.BLOCK_NOTE_BLOCK_PLING, 10.0F, (0.5 * count).toFloat())
                 }
 
-                bossBar.setTitle(chosenConcrete.itemMeta?.itemName + " §e§l${count}...")
+                bossBar.setTitle(chosenConcrete.itemMeta?.displayName + " §e§l${count}...")
 
                 bossBar.progress = (count.toDouble() - 1.0) / 2.0
                 count--
@@ -133,28 +152,42 @@ object Game {
     private fun purgeBlocks(chosenConcrete: Material) {
         Arena.purgeBlocks(chosenConcrete)
         bossBar.setTitle("§c§lPARADOS!")
+        bossBar.color = BarColor.RED
+        bossBar.progress = 1.0
 
-        for (player in playerSet) {
-            WebPlayerHandler.command(player, Playback.PAUSE)
+        Bukkit.getOnlinePlayers().forEach {
+            WebPlayerHandler.command(it, Playback.PAUSE)
         }
 
         object : BukkitRunnable() {
             override fun run() {
-                bossBar.setTitle("§a§lVOCÊ CONSEGUIU!")
+                if (gameStage == GameStage.PLAYING) {
+                    playerSet.forEach {
+                        bossBar.removePlayer(it)
+                        aliveBossBar.addPlayer(it)
+                        WebPlayerHandler.command(it, Playback.ALIVE)
+                    }
 
-                for (player in playerSet) {
-                    WebPlayerHandler.command(player, Playback.ALIVE)
-                    WebPlayerHandler.command(player, Playback.PLAY)
-                }
+                    Bukkit.getOnlinePlayers().forEach {
+                        WebPlayerHandler.command(it, Playback.PLAY)
+                    }
 
-                if (speedGap > 1.0) {
-                    speedGap -= 0.2
+                    if (speedGap > 0.5) {
+                        speedGap -= 0.2
+                    }
                 }
             }
         }.runTaskLater(DiscoEngine.getInstance(), 20 * 3)
 
         object : BukkitRunnable() {
             override fun run() {
+                if (gameStage == GameStage.PLAYING) {
+                    playerSet.forEach {
+                        bossBar.addPlayer(it)
+                        aliveBossBar.removePlayer(it)
+                    }
+                }
+
                 nextRound()
             }
         }.runTaskLater(DiscoEngine.getInstance(), 20 * 5)
@@ -177,11 +210,17 @@ object Game {
 
     fun loose(player: Player) {
         if (playerSet.contains(player)) {
+            Bukkit.getWorld("world")!!.strikeLightningEffect(player.location)
             playerSet.remove(player)
             player.inventory.clear()
-            player.sendMessage("§b[${Constants.DISCO_COLORFUL_LOGO}§b] §c${player.name}§e perdeu!")
+            player.teleport(Bukkit.getWorld("world")!!.spawnLocation)
+            player.sendMessage("${Constants.DISCO_COLORFUL_LOGO} §c${player.name}§e perdeu!")
 
-            if (playerSet.size == 1 || playerSet.size == 0) {
+            Bukkit.getOnlinePlayers().forEach {
+                WebPlayerHandler.command(it, Playback.LOOSE)
+            }
+
+            if (playerSet.size == 1) {
                 endGame()
             }
         }
@@ -189,41 +228,81 @@ object Game {
 
     fun endGame() {
         gameStage = GameStage.FINISHED
+        Arena.spawn()
 
         val winner = playerSet.single()
+        winner.teleport(Arena.center)
         DiscoUtils.sendMessage("§a" + winner.name + "§e venceu!!")
+        bossBar.color = BarColor.PURPLE
+        bossBar.progress = 1.0
+        bossBar.setTitle("§a§l" + winner.name + "§e§l VENCEU!")
+
+        Bukkit.getOnlinePlayers().forEach {
+            WebPlayerHandler.command(it, Playback.WINNER)
+        }
+
+        val task = object : BukkitRunnable() {
+            override fun run() {
+                spawnFireworks(winner)
+            }
+        }.runTaskTimer(DiscoEngine.getInstance(), 0, 10)
 
         object : BukkitRunnable() {
             override fun run() {
-                playerSet.remove(winner)
+                task.cancel()
                 winner.teleport(Bukkit.getWorld("world")!!.spawnLocation)
-                gameStage = GameStage.WAITING
-                tryToBeginCountdown()
+                resetGame()
             }
-        }.runTaskLater(DiscoEngine.getInstance(), 20 * 5)
+        }.runTaskLater(DiscoEngine.getInstance(), 20 * 10)
     }
 
     private fun resetGame() {
+        round = 0
         playerSet.clear()
         speedGap = 3.0
+        gameStage = GameStage.WAITING
+        bossBar.progress = 1.0
+        bossBar.setTitle(INITIAL_BOSS_BAR_MESSAGE)
+
+        tryToBeginCountdown()
         WebPlayerHandler.reset()
+
+        Bukkit.getOnlinePlayers().forEach {
+            it.inventory.clear()
+            it.inventory.setItem(0, Constants.VOTE_CHEST_ITEM)
+        }
     }
 
     private fun startMusic() {
-        var chosenMusic = Vote.getMostVotedMusic()
+        chosenMusic = Vote.getMostVotedMusic()
 
         if (chosenMusic == null) {
             chosenMusic = Music.values()[Random().nextInt(Music.values().size)]
         }
 
-        for (player in playerSet) {
-            WebPlayerHandler.link(player, chosenMusic.url)
-            WebPlayerHandler.command(player, Playback.PLAY)
+        Bukkit.getOnlinePlayers().forEach {
+            WebPlayerHandler.link(it, chosenMusic!!.url)
+            WebPlayerHandler.command(it, Playback.PLAY)
         }
 
         DiscoUtils.sendMessage("§6========================================")
-        DiscoUtils.sendMessage("§eTocando §a${chosenMusic.title} §6de §a${chosenMusic.author}")
+        DiscoUtils.sendMessage("§eTocando §a${chosenMusic!!.title} §6de §a${chosenMusic!!.author}")
         DiscoUtils.sendMessage("§6========================================")
+    }
+
+    private fun spawnFireworks(winner: Player) {
+        val r = random.nextInt(256)
+        val g = random.nextInt(256)
+        val b = random.nextInt(256)
+
+        val effects = FireworkEffect.builder()
+            .withTrail()
+            .withFlicker()
+            .with(FireworkEffect.Type.values()[random.nextInt(FireworkEffect.Type.values().size)])
+            .withColor(Color.fromRGB(r, g, b))
+            .build()
+
+        FireworkBuilder(winner.location).effects(effects).power(2)
     }
 
     fun isPlaying(player: Player): Boolean {
@@ -232,6 +311,10 @@ object Game {
 
     fun getGameStage(): GameStage {
         return gameStage
+    }
+
+    fun hasStarted(): Boolean {
+        return gameStage == GameStage.PLAYING
     }
 
     override fun toString(): String {

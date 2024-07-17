@@ -23,6 +23,11 @@ object Arena {
     private val startLocation = Location(Bukkit.getWorld("world"), 0.0, 60.0, 0.0)
     private const val step = 0.05
 
+    fun modifyProperties(cellSizeX: Int, cellSizeZ: Int) {
+        CELL_SIZE_X = cellSizeX
+        CELL_SIZE_Z = cellSizeZ
+    }
+
     fun modifyProperties(cellSizeX: Int, cellSizeZ: Int, gridSize: Int) {
         CELL_SIZE_X = cellSizeX
         CELL_SIZE_Z = cellSizeZ
